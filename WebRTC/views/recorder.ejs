@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hello World</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.3/socket.io.js"></script>
+    <script>
+    const socket = io('http://172.16.79.128:12312');
+    </script>
+</head>
+<body>
+
+</body>
+<script>
+    var userName = "username";
+    socket.on('connect', function () {
+        userName = prompt("请输入你的姓名?") || userName;
+        socket.emit('join', userName);
+        socket.emit('message', 'hello world!');
+    });
+    // socket.emit('message', { my: 'data client' });
+    socket.on("connect", () => {
+    console.log(socket.id); // x8WIv7-mJelg7on_ALbx
+    });
+
+    socket.on("disconnect", () => {
+    console.log(socket.id); // undefined
+    });
+</script>
+</html>
