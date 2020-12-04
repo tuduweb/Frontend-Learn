@@ -22,7 +22,7 @@ io.on('connection', (socket) => {
     //socket.emit('connect', 1);
 
     //信令转发
-    socket.on('message', function(message) {
+    socket.on('message', (message) => {
         console.log(message);
         socket.emit(message);
     });
@@ -32,19 +32,28 @@ io.on('connection', (socket) => {
         //subscribe/join a room
         //socket.join( data.room );
         console.log(data);
-        console.log(data.room)
+        console.log(data.room);
+  
         socket.join(data.room);
+        socket.join(data.socketID);
         socket.to(data.room).emit('new user', { socketID: data.socketID } );//似乎是发送除了自己的其它玩家
 
     } );
 
+    socket.on( 'newUserStart', ( data ) => {
+      socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
+  } );
+
 
     socket.on( 'sdp', ( data ) => {
+        console.log(data);
+        //console.log('sdp:  ' + data.sender + '   to:' + data.to);
         socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
     } );
 
 
     socket.on( 'ice candidates', ( data ) => {
+        console.log('ice candidates:  ' + data.sender);
         socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
     } );
 

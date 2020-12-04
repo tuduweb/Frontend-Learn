@@ -92,27 +92,27 @@
         // //    'iceconnectionstatechange', handleConnectionChange);
 
 
-        // function getUserMedia(constrains, success, error) {
-        //     if (navigator.mediaDevices.getUserMedia) {
-        //         //最新标准API
-        //         promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
-        //     } else if (navigator.webkitGetUserMedia) {
-        //         //webkit内核浏览器
-        //         promise = navigator.webkitGetUserMedia(constrains).then(success).catch(error);
-        //     } else if (navigator.mozGetUserMedia) {
-        //         //Firefox浏览器
-        //         promise = navagator.mozGetUserMedia(constrains).then(success).catch(error);
-        //     } else if (navigator.getUserMedia) {
-        //         //旧版API
-        //         promise = navigator.getUserMedia(constrains).then(success).catch(error);
-        //     }
-        // }
+        function getUserMedia(constrains, success, error) {
+            if (navigator.mediaDevices.getUserMedia) {
+                //最新标准API
+                promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
+            } else if (navigator.webkitGetUserMedia) {
+                //webkit内核浏览器
+                promise = navigator.webkitGetUserMedia(constrains).then(success).catch(error);
+            } else if (navigator.mozGetUserMedia) {
+                //Firefox浏览器
+                promise = navagator.mozGetUserMedia(constrains).then(success).catch(error);
+            } else if (navigator.getUserMedia) {
+                //旧版API
+                promise = navigator.getUserMedia(constrains).then(success).catch(error);
+            }
+        }
 
-        // function canGetUserMediaUse() {
-        //     return !!(navigator.mediaDevices.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
-        // }
+        function canGetUserMediaUse() {
+            return !!(navigator.mediaDevices.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+        }
 
-        // // 当获得到自己的公网地址后，发送给其它客户端
+        // 当获得到自己的公网地址后，发送给其它客户端
         // localPeerConnection.onicecandidate = function(event) {
         //     console.log('I got my icecandidate info')
         //     if (event.candidate) {
@@ -120,14 +120,14 @@
         //     }
         //     socket.emit('message', { 'type' : 'onicecandidate','event' : event.candidate});
         // }
-        // // 如果监测到本地媒体流连接到本地，将其绑定到一个video标签上输出
-        // // localPeer.ontrack = function(e) {
-        // //     // 因为媒体流是一个数组
-        // //     if (remoteVideo.srcObject !== e.streams[0]) {
-        // //         remoteVideo.srcObject = e.streams[0];
-        // //         console.log('received remote stream');
-        // //     }
-        // // };
+        // 如果监测到本地媒体流连接到本地，将其绑定到一个video标签上输出
+        // localPeer.ontrack = function(e) {
+        //     // 因为媒体流是一个数组
+        //     if (remoteVideo.srcObject !== e.streams[0]) {
+        //         remoteVideo.srcObject = e.streams[0];
+        //         console.log('received remote stream');
+        //     }
+        // };
 
 
         // function showVideo() {
@@ -170,7 +170,7 @@
 
 </head>
 <body>
-    <h1><%= title %></h1>
+    <h1 id="socket_id">Header</h1>
     <p>Welcome to <%= title %></p>
 
     <div>
@@ -179,14 +179,20 @@
         <canvas id="canvas"></canvas>
         <button onclick="capture()">拍照</button>
         <button id="connect">CONNECT</button>
+
+        <div id="videos"></div>
     </div>
 </body>
 <script>
 
+window.addEventListener( 'load', () => {
 
     var userName = "username";
     var room = '1001 room';
     var socketID = 0;
+    var pc = [];
+    var myStream = '';
+
     socket.on('connect', function () {
         socketID = socket.io.engine.id;
     
@@ -195,31 +201,195 @@
                 'socketID': socketID
             });
     
-        console.log('hello world!' + socketID)
+        console.log('hello world!' + socketID);
         //userName = prompt("请输入你的姓名?") || userName;
         //socket.emit('join', userName);
         socket.emit('message', 'hello world!' + socketID);
+        var elm = document.getElementById('socket_id');
+        elm.innerText = socketID;
+        //console.log(document.getElementById('socket_id'));//.innerHTML(socketID);
     });
+
 
     //点对点准备建立连接
     socket.on( 'new user', ( data ) => {
                 console.log("hello new user");
+                console.log(data);
+                pc.push(data.sender);
+                init( true, data.socketID);
                 socket.emit( 'newUserStart', { to: data.socketID, sender: socketID } );
             });
-
-
-    // socket.emit('message', { my: 'data client' });
-    socket.on("connect", () => {
-        console.log(socket.id); // x8WIv7-mJelg7on_ALbx
+    
+    socket.on( 'newUserStart', ( data ) => {
+        //pc.push( data.sender );
+        //init( false, data.sender );
+        pc.push(data.sender);
+        init( false, data.sender);
+        console.log("pc.push " + data.sender);
     });
 
-    socket.on("disconnect", () => {
-        console.log(socket.id); // undefined
+    socket.on( 'ice candidates', async ( data ) => {
+        console.log('ice candidates');
+        console.log(data);
+        data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
     });
 
 
+    socket.on( 'sdp', async ( data ) => {
+        console.log('sdp');
+        console.log(data);
+        if ( data.description.type === 'offer' ) {
+            data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
+            
+            if (canGetUserMediaUse()) {
+                getUserMedia({
+                    video: true,
+                    audio: true
+                }, async function (stream) {
+
+                    stream.getTracks().forEach( ( track ) => {
+                        pc[data.sender].addTrack( track, stream );
+                    } );
+
+                    let answer = await pc[data.sender].createAnswer();
+
+                    await pc[data.sender].setLocalDescription( answer );
+
+                    socket.emit( 'sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socketID } );
+
+                }, function (error) {
+                    console.log("访问用户媒体设备失败：", error.name, error.message);
+                })
+            } else { alert('您的浏览器不兼容'); }
+
+        }
+
+        else if ( data.description.type === 'answer' ) {
+            await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
+        }
+    } );
 
 
+    // // socket.emit('message', { my: 'data client' });
+    // socket.on("connect", () => {
+    //     console.log(socket.id); // x8WIv7-mJelg7on_ALbx
+    // });
+
+    // socket.on("disconnect", () => {
+    //     console.log(socket.id); // undefined
+    // });
+
+    function init( createOffer, partnerName){
+        pc[partnerName] = new RTCPeerConnection(iceServer);
+
+        if(myStream){
+            //
+        }else{
+            if (canGetUserMediaUse()) {
+                getUserMedia({
+                    video: true,
+                    audio: true
+                }, function (stream) {
+                    myStream = stream;
+                    stream.getTracks().forEach( ( track ) => {
+                            pc[partnerName].addTrack( track, stream );//should trigger negotiationneeded event
+                    });
+
+                    // const video = document.getElementById('video');
+                    // video.srcObject = stream;
+                    // video.play();
+                    const localVidElem = document.getElementById( 'video' );
+
+                    localVidElem.srcObject = stream;
+                    //mirrorMode ? localVidElem.classList.add( 'mirror-mode' ) : localVidElem.classList.remove( 'mirror-mode' );
+
+                }, function (error) {
+                    console.log("访问用户媒体设备失败：", error.name, error.message);
+                })
+            } else { alert('您的浏览器不兼容'); }
+        }
+
+        if ( createOffer ) {
+            pc[partnerName].onnegotiationneeded = async () => {
+                let offer = await pc[partnerName].createOffer();
+                console.log(offer);
+                await pc[partnerName].setLocalDescription( offer );
+                console.log('localDescription');
+                console.log(pc[partnerName].localDescription);
+                socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socketID } );
+            };
+        };
+
+        //send ice candidate to partnerNames
+        pc[partnerName].onicecandidate = ( { candidate } ) => {
+            socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socketID } );
+        };
+
+        //add
+        pc[partnerName].ontrack = ( e ) => {
+            let str = e.streams[0];
+            console.log("stream add:" + str);
+            if ( document.getElementById( `${ partnerName }-video` ) ) {
+                document.getElementById( `${ partnerName }-video` ).srcObject = str;
+            }
+
+            else {
+                //video elem
+                let newVid = document.createElement( 'video' );
+                newVid.id = `${ partnerName }-video`;
+                newVid.srcObject = str;
+                newVid.autoplay = true;
+                newVid.className = 'remote-video';
+
+                //video controls elements
+                let controlDiv = document.createElement( 'div' );
+                controlDiv.className = 'remote-video-controls';
+                controlDiv.innerHTML = `<i class="fa fa-microphone text-white pr-3 mute-remote-mic" title="Mute"></i>
+                    <i class="fa fa-expand text-white expand-remote-video" title="Expand"></i>`;
+
+                //create a new div for card
+                let cardDiv = document.createElement( 'div' );
+                cardDiv.className = 'card card-sm';
+                cardDiv.id = partnerName;
+                cardDiv.appendChild( newVid );
+                cardDiv.appendChild( controlDiv );
+
+                //put div in main-section elem
+                document.getElementById( 'videos' ).appendChild( cardDiv );
+
+                //h.adjustVideoElemSize();
+            }
+        };
+
+        pc[partnerName].onconnectionstatechange = ( d ) => {
+            console.log(partnerName + '  :' + pc[partnerName].iceConnectionState)
+                switch ( pc[partnerName].iceConnectionState ) {
+                    case 'disconnected':
+                    case 'failed':
+                        //h.closeVideo( partnerName );
+                        break;
+
+                    case 'closed':
+                        //h.closeVideo( partnerName );
+                        break;
+                }
+            };
+
+
+
+            pc[partnerName].onsignalingstatechange = ( d ) => {
+                switch ( pc[partnerName].signalingState ) {
+                    case 'closed':
+                        console.log( "Signalling state is 'closed'" );
+                        //h.closeVideo( partnerName );
+                        break;
+                }
+            };
+
+
+    }
+
+});
 
     //
 </script>
