@@ -4,7 +4,7 @@
     <title>Hello World</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.3/socket.io.js"></script>
     <script>
-    const socket = io('http://172.16.79.128:12312');
+    const socket = io('//');
     </script>
 </head>
 <body>
@@ -14,8 +14,12 @@
     var userName = "username";
     socket.on('connect', function () {
         userName = prompt("请输入你的姓名?") || userName;
-        socket.emit('join', userName);
+        //socket.emit('join', userName);
         socket.emit('message', 'hello world!');
+
+        socket.on('message', (msg) => {
+            console.log('recv : ' + msg);
+        });
         
     });
     // socket.emit('message', { my: 'data client' });

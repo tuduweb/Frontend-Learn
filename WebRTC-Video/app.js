@@ -24,9 +24,8 @@ io.on('connection', (socket) => {
     //信令转发
     socket.on('message', (message) => {
         console.log(message);
-        socket.emit(message);
+        socket.emit('message', message);
     });
-
 
     socket.on( 'subscribe', ( data ) => {
         //subscribe/join a room
@@ -44,32 +43,29 @@ io.on('connection', (socket) => {
       socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
   } );
 
-
     socket.on( 'sdp', ( data ) => {
         console.log(data);
         //console.log('sdp:  ' + data.sender + '   to:' + data.to);
         socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
     } );
 
-
     socket.on( 'ice candidates', ( data ) => {
         console.log('ice candidates:  ' + data.sender);
         socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
     } );
 
-
-    socket.on( 'chat', ( data ) => {
-        socket.to( data.room ).emit( 'chat', { sender: data.sender, msg: data.msg } );
-    } );
-
 });
+
+// socket.on( 'chat', ( data ) => {
+//   socket.to( data.room ).emit( 'chat', { sender: data.sender, msg: data.msg } );
+// } );
 
 // io.on("connection", (socket) => {
 //     console.log(socket.id); // x8WIv7-mJelg7on_ALbx
 //   });
 
 http.listen(12312, _ => {
-  console.log("server running on 3001");
+  console.log("server running on 12312");
 });
 
 var app = express();
