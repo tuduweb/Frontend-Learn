@@ -10,19 +10,7 @@
     //建立socket链接
     const socket = io('//');
     const iceServer = {
-        iceServers: [
-            {
-                urls: ["stun:eu-turn4.xirsys.com"]
-            },
-            {
-                username: "ml0jh0qMKZKd9P_9C0UIBY2G0nSQMCFBUXGlk6IXDJf8G2uiCymg9WwbEJTMwVeiAAAAAF2__hNSaW5vbGVl",
-                credential: "4dd454a6-feee-11e9-b185-6adcafebbb45",
-                urls: [
-                    "turn:eu-turn4.xirsys.com:80?transport=udp",
-                    "turn:eu-turn4.xirsys.com:3478?transport=tcp"
-                ]
-            }
-        ]
+        iceServers: [{   urls: [ "stun:ss-turn1.xirsys.com" ]}, {   username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi",   credential: "446118be-38a4-11eb-9ece-0242ac140004",   urls: [       "turn:ss-turn1.xirsys.com:80?transport=udp",       "turn:ss-turn1.xirsys.com:3478?transport=udp"   ]}]
     };
     function getUserMedia(constrains, success, error) {
         if (navigator.mediaDevices.getUserMedia) {
@@ -103,11 +91,14 @@ window.addEventListener( 'load', () => {
         data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
     });
 
-
+    //SDP协议来交换媒体信息.
     socket.on( 'sdp', async ( data ) => {
         console.log('sdp');
         console.log(data);
+        //offer:该会话描述对象描述首次握手的请求/响应。会话过程从发送方到接收方。
+        //提议
         if ( data.description.type === 'offer' ) {
+            //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/setRemoteDescription
             data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
             
             if (canGetUserMediaUse()) {
@@ -132,8 +123,9 @@ window.addEventListener( 'load', () => {
             } else { alert('您的浏览器不兼容'); }
 
         }
-
+        //SDP协议请求内容包含在属性sdp中。 换言之，此会话描述描述了商定的配置，并将被发送以完成协商。.
         else if ( data.description.type === 'answer' ) {
+            //应答
             await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
         }
     } );
@@ -170,6 +162,8 @@ window.addEventListener( 'load', () => {
 
         if ( createOffer ) {
             pc[partnerName].onnegotiationneeded = async () => {
+                //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/createOffer
+                //里面有.then的步骤
                 let offer = await pc[partnerName].createOffer();
                 console.log(offer);
                 await pc[partnerName].setLocalDescription( offer );
@@ -180,11 +174,13 @@ window.addEventListener( 'load', () => {
         };
 
         //send ice candidate to partnerNames
+        //只要本地代理ICE 需要通过信令服务器传递信息给其他对等端时就会触发
         pc[partnerName].onicecandidate = ( { candidate } ) => {
+            //请注意，当检测到协议结束时candidate 属性为 null.
             socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socketID } );
         };
 
-        //add
+        //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/ontrack
         pc[partnerName].ontrack = ( e ) => {
             let str = e.streams[0];
             console.log("stream add:" + str);
@@ -194,6 +190,7 @@ window.addEventListener( 'load', () => {
 
             else {
                 //video elem
+                //ES6 新增了let命令，用来声明局部变量。它的用法类似于var，但是所声明的变量，只在let命令所在的代码块内有效，而且有暂时性死区的约束。
                 let newVid = document.createElement( 'video' );
                 newVid.id = `${ partnerName }-video`;
                 newVid.srcObject = str;
@@ -220,9 +217,15 @@ window.addEventListener( 'load', () => {
             }
         };
 
+        //This happens whenever the aggregate state of the connection changes. The aggregate state is a combination of the states of all of the individual network transports being used by the connection.
+        //https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/onconnectionstatechange
         pc[partnerName].onconnectionstatechange = ( d ) => {
             console.log(partnerName + '  :' + pc[partnerName].iceConnectionState)
                 switch ( pc[partnerName].iceConnectionState ) {
+                    case "connected":
+                        // The connection has become fully connected
+                        console.log( partnerName + ': connect');
+                        break;
                     case 'disconnected':
                     case 'failed':
                         //h.closeVideo( partnerName );
@@ -235,9 +238,12 @@ window.addEventListener( 'load', () => {
             };
 
 
-
+            //to notify it that its signaling state, as indicated by the signalingState property, has changed.
             pc[partnerName].onsignalingstatechange = ( d ) => {
                 switch ( pc[partnerName].signalingState ) {
+                    case "stable":
+                        console.log("ICE negotiation complete");
+                        break;
                     case 'closed':
                         console.log( "Signalling state is 'closed'" );
                         //h.closeVideo( partnerName );

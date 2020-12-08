@@ -44,7 +44,7 @@ io.on('connection', (socket) => {
   } );
 
     socket.on( 'sdp', ( data ) => {
-        console.log(data);
+        console.log('sdp' + data.description);
         //console.log('sdp:  ' + data.sender + '   to:' + data.to);
         socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
     } );
