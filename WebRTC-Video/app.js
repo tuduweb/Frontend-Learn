@@ -17,6 +17,7 @@ var io = require('socket.io')(http,{
       methods: ["GET", "POST"]
     }
   });
+
 io.on('connection', (socket) => {
     console.log(socket.id);
     //socket.emit('connect', 1);
