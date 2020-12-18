@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>hello world</title>
+    <style>
+        #main-page::after{
+            clear: both;
+        }
+        #main-left{
+            width: 200px;
+            float: left;
+        }
+        #main-right{
+            width: auto;
+            float: right;
+        }
+    </style>
+    <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
+    <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
+</head>
+<body>
+    
+<div id="main-page">
+
+    <div id="main-left">
+        <div id="me">
+            hello
+        </div>
+        <div class='user-list'>
+            <ul id="user-list">
+                <li>User A</li>
+                <li>User B</li>
+                <li>User C</li>
+            </ul>
+        </div>
+
+    </div>
+    <div id="main-right">
+        <video autoplay controls id="video-local"></video>
+    </div>
+
+
+</div>
+
+
+</body>
+<script>
+    //封装一部分函数
+    function getUserMedia(constrains, success, error) {
+        if (navigator.mediaDevices.getUserMedia) {
+            //最新标准API
+            promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
+        } else if (navigator.webkitGetUserMedia) {
+            //webkit内核浏览器
+            promise = navigator.webkitGetUserMedia(constrains).then(success).catch(error);
+        } else if (navigator.mozGetUserMedia) {
+            //Firefox浏览器
+            promise = navagator.mozGetUserMedia(constrains).then(success).catch(error);
+        } else if (navigator.getUserMedia) {
+            //旧版API
+            promise = navigator.getUserMedia(constrains).then(success).catch(error);
+        }
+    }
+
+    function canGetUserMediaUse() {
+        return !!(navigator.mediaDevices.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+    }
+
+
+    const socket = io('//');
+    var socketID = 0;
+
+    $(document).ready(function(){
+        const localVideoElm = document.getElementById('video-local');
+        // console.log(localVideoElm.attr('data-test'))
+        console.log(canGetUserMediaUse())
+
+        if(canGetUserMediaUse()){
+            getUserMedia({
+                video : true,
+                audio: false
+            },(stream) => {
+                //console.log(stream)
+                //这是原生dom的写法
+                localVideoElm.srcObject = stream;
+                $(localVideoElm).width(800);
+
+            },(err) => {
+                console.log("访问用户媒体设备失败：", err.name, err.message);
+            })
+        } else {
+            alert('您的浏览器不兼容，建议安装最新版Chrome');
+        }
+
+        //监听加入
+        socket.on('connect', () => {
+            socketID = socket.id;//socket.io.engine.id;
+            console.log('hello local user: ' + socket.id);
+            $('#me').text('hello ' + socket.id);
+
+            //加入时候向服务器发送订阅/注册?
+            socket.emit('new user greet', {msg : 'hello'});
+            
+            socket.on('need connect', (data) => {
+                console.log('someone need connect' + data.msg);
+                console.log(data.sender);
+                let li = $('<li></li>').text(data.sender).attr('user-id', data.sender);
+                //$('#user-list').append('<li>' + data.sender + '</li>');
+                $('#user-list').append(li);
+
+                socket.emit('ok we connect', { sender: socketID, receiver: data.sender});
+            })
+
+            socket.on('user disconnected', (user) => {
+                console.log('user disconnected ' + user)
+                //console.log('disconnect' +  $('#user-list li[user-id="' + user + '"]').text())
+                $('#user-list li[user-id="' + user + '"]').remove();
+            })
+
+            socket.on('ok we connect', (data) => {
+                console.log('ok we connect ' + data.sender );
+                let li = $('<li></li>').text(data.sender).attr('user-id', data.sender);
+                $('#user-list').append(li);
+            })
+
+        });
+
+    });
+</script>
+</html>
