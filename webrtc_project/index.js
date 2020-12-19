@@ -8,8 +8,8 @@ app.get('/', (req, res) => {
   });
 
 //还需要确定一下路由的方式
-app.get('/record', (req, res) => {
-    res.sendFile(__dirname + '/record.html');
+app.get('/record2', (req, res) => {
+    res.sendFile(__dirname + '/record2.html');
 })
 
 
@@ -44,4 +44,14 @@ io.on('connection', (socket) => {
 
 http.listen(3000, () => {
     console.log('listening on *:3000');
-  });
+});
+
+// const fs = require('fs');
+// const https = require('https');
+// // start https server
+// let sslOptions = {
+//     key: fs.readFileSync('key.pem'),
+//     cert: fs.readFileSync('cert.pem')
+//  };
+ 
+//  let serverHttps = https.createServer(sslOptions, app).listen(443);

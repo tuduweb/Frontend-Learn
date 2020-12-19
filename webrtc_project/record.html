@@ -3,17 +3,44 @@
 <head>
     <title>hello world</title>
     <style>
+        #main-page{
+            width: 100%;
+            overflow: hidden;
+        }
         #main-page::after{
             clear: both;
         }
         #main-left{
-            width: 200px;
+            width: 30%;
             float: left;
         }
         #main-right{
-            width: auto;
+            width: 70%;
             float: right;
         }
+        #user-list{
+            width: 300px;
+            padding: 0px;
+            margin: 0px;
+        }
+        
+        #user-list li{
+            padding: 2.5px 10px;
+            border: 1px #ccc solid;
+            list-style: none;
+            margin-bottom: 5px;
+            background-color:azure;
+        }
+
+        #user-list li dl{
+            overflow: hidden;
+        }
+
+        #user-list li dl dd{
+            float: left;
+        }
+
+
     </style>
     <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
@@ -28,7 +55,13 @@
         </div>
         <div class='user-list'>
             <ul id="user-list">
-                <li>User A</li>
+                <li id="user-test">
+                    <dl>
+                        <dt>User A</dt>
+                        <dd><button class="call">发起通话</button></dd>
+                        <dd>私聊</dd>
+                     </dl>
+                </li>
                 <li>User B</li>
                 <li>User C</li>
             </ul>
@@ -37,6 +70,8 @@
     </div>
     <div id="main-right">
         <video autoplay controls id="video-local"></video>
+
+        <video autoplay controls id="video-remote"></video>
     </div>
 
 
@@ -69,12 +104,79 @@
 
     const socket = io('//');
     var socketID = 0;
+    var currentConnect = 0;
+
+    //中转服务器
+    const iceServer = {
+        iceServers: [{   urls: [ "stun:ss-turn1.xirsys.com" ]}, {   username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi",   credential: "446118be-38a4-11eb-9ece-0242ac140004",   urls: [       "turn:ss-turn1.xirsys.com:80?transport=udp",       "turn:ss-turn1.xirsys.com:3478?transport=udp"   ]}]
+    };
+
+    const localVideoElm = document.getElementById('video-local');
+
+    var pc = [];
+    
+    function init(parterID, createOffer){
+        pc[parterID] = new RTCPeerConnection(iceServer);
+
+        //尝试刷新本地摄像头
+    
+    
+        //是否发起连接
+        if(createOffer){
+            //
+        }
+
+        //监听事件
+        pc[parterID].onicecandidate = ( { candidate } ) => {
+            //请注意，当检测到协议结束时candidate 属性为 null.
+            socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socketID } );
+        };
+
+        //当有新的流添加进来时 跟 addtrack 相关
+        pc[parterID].ontrack = ( event ) => {
+            let stream = event.streams[0];
+            console.log("stream add:" + stream);
+        }
+
+        //当状态改变时
+        pc[parterID].onconnectionstatechange = ( d ) => {
+            console.log(parterID + '  :' + pc[parterID].iceConnectionState);
+            switch ( pc[partnerName].iceConnectionState ) {
+                case "connected":
+                    // The connection has become fully connected
+                    console.log( partnerName + ': connect');
+                    break;
+                case 'disconnected':
+                case 'failed':
+                    //h.closeVideo( partnerName );
+                    break;
+
+                case 'closed':
+                    //h.closeVideo( partnerName );
+                    break;
+            }
+        }
+
+        //to notify it that its signaling state, as indicated by the signalingState property, has changed.
+        pc[parterID].onsignalingstatechange = ( d ) => {
+            switch ( pc[parterID].signalingState ) {
+                    case "stable":
+                        console.log("ICE negotiation complete");
+                        break;
+                    case 'closed':
+                        console.log( "Signalling state is 'closed'" );
+                        //h.closeVideo( partnerName );
+                        break;
+                }
+        }
+    }
+
 
     $(document).ready(function(){
-        const localVideoElm = document.getElementById('video-local');
         // console.log(localVideoElm.attr('data-test'))
         console.log(canGetUserMediaUse())
 
+        //下面的函数需要封装
         if(canGetUserMediaUse()){
             getUserMedia({
                 video : true,
@@ -108,19 +210,33 @@
                 //$('#user-list').append('<li>' + data.sender + '</li>');
                 $('#user-list').append(li);
 
+                $('#user-test').attr('user-id', data.sender)
+                $('#user-test button[class="call"]').click(function(){
+                    console.log($(this).parent().parent().parent().attr('user-id'))
+                })
+
                 socket.emit('ok we connect', { sender: socketID, receiver: data.sender});
+
+                currentConnect++;
+
             })
 
             socket.on('user disconnected', (user) => {
+                currentConnect
                 console.log('user disconnected ' + user)
                 //console.log('disconnect' +  $('#user-list li[user-id="' + user + '"]').text())
                 $('#user-list li[user-id="' + user + '"]').remove();
+
+                if(currentConnect > 0)
+                    currentConnect--;
             })
 
             socket.on('ok we connect', (data) => {
                 console.log('ok we connect ' + data.sender );
                 let li = $('<li></li>').text(data.sender).attr('user-id', data.sender);
                 $('#user-list').append(li);
+
+                currentConnect++;
             })
 
         });
