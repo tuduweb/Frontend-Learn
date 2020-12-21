@@ -12,8 +12,13 @@ app.get('/record2', (req, res) => {
     res.sendFile(__dirname + '/record2.html');
 })
 
+app.get('/camera', (req, res) => {
+    res.sendFile(__dirname + '/camera.html');
+})
 
 app.use("/static", express.static('static/'));
+
+
 
 
 

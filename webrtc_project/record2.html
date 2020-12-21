@@ -12,13 +12,13 @@
 
 <button id="capture">拍照</button>
 
+<canvas id="capture-canvas" style="display: none;"></canvas>
 <ul id="capture-list"></ul>
-
-</body>
 
 <script>
     //封装一部分函数
     function getUserMedia(constrains, success, error) {
+        let promise;
         if (navigator.mediaDevices.getUserMedia) {
             //最新标准API
             promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
@@ -32,6 +32,7 @@
             //旧版API
             promise = navigator.getUserMedia(constrains).then(success).catch(error);
         }
+        return promise;
     }
 
     function canGetUserMediaUse() {
@@ -60,22 +61,33 @@
         }
 
 
-        $('#capture').click(function(){
-            if (promise) {//如果promise存在
+        $('#capture').click(function(e){
+            e.preventDefault();
+            let video = localVideoElm
+            let isPlaying = !(video.paused || video.ended || video.seeking || video.readyState < video.HAVE_FUTURE_DATA)
+            if (isPlaying === true) {//如果promise存在
                 //const canvas = document.getElementById
                 //canvas.width = localVideoElm.clientWidth;
                 //canvas.height = localVideoElm.clientHeight;
-                let canvas = $('<canvas></canvas>');
+                let canvas = $('#capture-canvas');
                 canvas.attr('width', localVideoElm.clientWidth);//设置canvas的宽度
                 canvas.attr('height', localVideoElm.clientHeight);//设置canvas的高度
 
-                $('#capture-list').append($('<li></li>').html(canvas));//插入到id为capture-list的有序列表里
+                let img = $('<img>');
+                img.attr('width', localVideoElm.clientWidth);//设置图像的宽度
+                img.attr('height', localVideoElm.clientHeight);//设置图像的高度
+
 
                 //canvas[0] //jQuery对象转dom
                 var context = canvas[0].getContext('2d');
                 //在canvas上绘图，其绘图坐标为0,0; 
                 //绘图大小为摄像头内容的宽度，高度（全局绘制，你可以改变这些值试试效果）。
                 context.drawImage(localVideoElm, 0, 0, localVideoElm.clientWidth, localVideoElm.clientHeight);
+                //根据canvas内容进行编码，并赋值到图片上
+                var data = canvas[0].toDataURL('image/png');
+                img.attr('src', data);
+                //插入到id为capture-list的有序列表里
+                $('#capture-list').append($('<li></li>').html(img));
             } else {
                 alert('请先打开摄像头');
             }
@@ -83,4 +95,5 @@
 
     });
 </script>
+</body>
 </html>
