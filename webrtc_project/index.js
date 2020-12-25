@@ -1,4 +1,5 @@
-var app = require('express')();
+var express = require('express');
+var app = express();
 var http = require('http').createServer(app);
 
 var fs = require('fs');
@@ -11,6 +12,9 @@ const https = require('https').createServer(sslOptions, app);
 
 var io = require('socket.io')(https);
 
+var path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
@@ -21,7 +25,7 @@ app.get('/camera', (req, res) => {
 });
 
 app.get('/record', (req, res) => {
-    res.sendFile(__dirname + '/record.html');
+    res.sendFile(__dirname + '/record2.html');
 });
 
 app.get('/camera_test', (req, res) => {
@@ -50,35 +54,36 @@ io.on("connection", (socket) => {
         socket.broadcast.emit("chat message", msg);
     })
 
-    socket.on( 'subscribe', ( data ) => {
-        //subscribe/join a room
-        //socket.join( data.room );
-        console.log(data);
-        console.log(data.room);
+//     socket.on( 'subscribe', ( data ) => {
+//         //subscribe/join a room
+//         //socket.join( data.room );
+//         console.log(data);
+//         console.log(data.room);
   
-        socket.join(data.room);
-        socket.join(data.socketID);
-        socket.to(data.room).emit('new user', { socketID: data.socketID } );//似乎是发送除了自己的其它玩家
+//         socket.join(data.room);
+//         socket.join(data.socketID);
+//         socket.to(data.room).emit('new user', { socketID: data.socketID } );//似乎是发送除了自己的其它玩家
 
-    } );
+//     } );
 
-    socket.on( 'newUserStart', ( data ) => {
-      socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
-  } );
+//     socket.on( 'newUserStart', ( data ) => {
+//       socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
+//   } );
 
 
     socket.on('new user greet', (data) => {
         console.log(socket.id + ' greet ' + data.msg);
         socket.broadcast.emit('need connect', {sender: socket.id, msg : data.msg});
-    })
+    });
 
     socket.on('ok we connect', (data) => {
         io.to(data.receiver).emit('ok we connect', {sender : data.sender});
-    })
+    });
 
 
     socket.on( 'sdp', ( data ) => {
-        console.log('sdp' + data.description);
+        console.log('sdp');
+        console.log(data.description);
         //console.log('sdp:  ' + data.sender + '   to:' + data.to);
         socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
     } );

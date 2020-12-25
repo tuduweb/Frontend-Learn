@@ -59,23 +59,23 @@
             </div>
             <div class='user-list'>
                 <ul id="user-list">
-                    <li id="user-test">
+                    <!-- <li id="user-test">
                         <dl>
-                            <dt>User A</dt>
+                            <dt>User Test</dt>
                             <dd><button class="call">发起通话</button></dd>
                             <dd>私聊</dd>
                         </dl>
-                    </li>
-                    <li>User B</li>
-                    <li>User C</li>
+                    </li> -->
                 </ul>
             </div>
 
         </div>
         <div id="main-right">
-            <video autoplay controls id="video-local"></video>
+            <div id="local-video">
+                <video autoplay controls id="video-local"></video>
+            </div>
 
-            <video autoplay controls id="video-remote"></video>
+            <!-- <video autoplay controls id="video-remote"></video> -->
             <div id="videos"></div>
         </div>
 
@@ -85,7 +85,7 @@
     <script>
         //封装一部分函数
         function getUserMedia(constrains, success, error) {
-            let promise
+            let promise;
             if (navigator.mediaDevices.getUserMedia) {
                 //最新标准API
                 promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
@@ -99,20 +99,24 @@
                 //旧版API
                 promise = navigator.getUserMedia(constrains).then(success).catch(error);
             }
-            return promise
+            return promise;
         }
 
         function canGetUserMediaUse() {
             return !!(navigator.mediaDevices.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
         }
 
+        //STUN,TURN服务器配置参数
         const iceServer = {
             iceServers: [{ urls: ["stun:ss-turn1.xirsys.com"] }, { username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi", credential: "446118be-38a4-11eb-9ece-0242ac140004", urls: ["turn:ss-turn1.xirsys.com:80?transport=udp", "turn:ss-turn1.xirsys.com:3478?transport=udp"] }]
         };
 
+        //本地视频的对象
         const localVideoElm = document.getElementById("video-local");
 
+        //本地流
         var localStream = null;
+        //存放RTCPeerConnection的数组
         var pc = [];
 
         function init(socket_id) {
@@ -139,17 +143,19 @@
 
         }
 
-        function P2PInit(peerName, createOffer) {
+        function PRInit(parterName, createOffer) {
 
-            pc[peerName] = new RTCPeerConnection(iceServer);
+            pc[parterName] = new RTCPeerConnection(iceServer);
 
             //本地流
             if (localStream) {
+
                 localStream.getTracks().forEach((track) => {
-                    pc[peerName].addTrack(track, localStream);//should trigger negotiationneeded event
+                    pc[parterName].addTrack(track, localStream);//should trigger negotiationneeded event
                 });
 
             } else {
+
                 if (canGetUserMediaUse()) {
                     getUserMedia({
                         video: true,
@@ -160,27 +166,28 @@
                         $(localVideoElm).width(800);
 
                         stream.getTracks().forEach((track) => {
-                            pc[peerName].addTrack(track, stream);//should trigger negotiationneeded event
+                            pc[parterName].addTrack(track, stream);//should trigger negotiationneeded event
                         });
                     }, function (error) {
                         console.log("访问用户媒体设备失败：", error.name, error.message);
                     })
                 } else { alert('您的浏览器不兼容'); }
+
             }
             //本地流创建完毕，发起SDP消息
             if (createOffer) {
                 //每当WebRTC基础结构需要你重新启动会话协商过程时，都会调用此函数。它的工作是创建和发送一个请求，给被叫方，要求它与我们联系。
-                pc[peerName].onnegotiationneeded = () => {
+                pc[parterName].onnegotiationneeded = () => {
                     //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/createOffer
 
-                    pc[peerName].createOffer().then((offer) => {
-                        return pc[peerName].setLocalDescription(offer);
+                    pc[parterName].createOffer().then((offer) => {
+                        return pc[parterName].setLocalDescription(offer);
                     }).then(() => {
                         //把发起者的描述信息通过Signal Server发送到接收者
                         socket.emit('sdp', {
                             type: 'video-offer',
-                            description: pc[peerName].localDescription,
-                            to: peerName,
+                            description: pc[parterName].localDescription,
+                            to: parterName,
                             sender: socketID
                         });
                     })
@@ -188,14 +195,14 @@
             }
 
             //当向连接中添加磁道时，track 事件的此处理程序由本地WebRTC层调用。例如，可以将传入媒体连接到元素以显示它。详见 Receiving new streams 。
-            pc[peerName].ontrack = (ev) => {
+            pc[parterName].ontrack = (ev) => {
                 let str = ev.streams[0];
 
-                if (document.getElementById(`${peerName}-video`)) {
-                    document.getElementById(`${peerName}-video`).srcObject = str;
+                if (document.getElementById(`${parterName}-video`)) {
+                    document.getElementById(`${parterName}-video`).srcObject = str;
                 } else {
                     let newVideo = document.createElement('video');
-                    newVideo.id = `${peerName}-video`;
+                    newVideo.id = `${parterName}-video`;
                     newVideo.autoplay = true;
                     newVideo.controls = true;
                     newVideo.className = 'remote-video';
@@ -206,11 +213,10 @@
             }
 
             //当需要你通过信令服务器将一个ICE候选发送给另一个对等端时，本地ICE层将会调用你的 icecandidate 事件处理程序。有关更多信息，请参阅Sending ICE candidates 以查看此示例的代码。
-            pc[peerName].onicecandidate = ({ candidate }) => {
-                socket.emit('ice candidates', { candidate: candidate, to: peerName, sender: socketID });
+            pc[parterName].onicecandidate = ({ candidate }) => {
+                socket.emit('ice candidates', { candidate: candidate, to: parterName, sender: socketID });
             }
 
-            //pc[peerName].onnegotiationneeded
         }
 
         function closeVideoCall(parterName) {
@@ -274,28 +280,13 @@
         socket.on('sdp', (data) => {
             console.log('sdp');
             if (data.description.type === 'offer') {
-                //P2PInit(socketID, false);
-                P2PInit(data.sender, false);
+                //PRInit(socketID, false);
+                PRInit(data.sender, false);
                 //把发送者(offer)的描述，存储在接收者的remoteDesc中。
                 let desc = new RTCSessionDescription(data.description);
                 pc[data.sender].setRemoteDescription(desc).then(() => {
 
-                    //给接收者设置远程视频（发送者offer的）
-                    if (canGetUserMediaUse()) {
-                        getUserMedia({
-                            video: true,
-                            audio: false
-                        }, (stream) => {
-
-                            stream.getTracks().forEach((track) => {
-                                pc[data.sender].addTrack(track, stream);
-                            });
-
-                        }, function (error) {
-                            console.log("访问用户媒体设备失败：", error.name, error.message);
-                        }).then(() => {
-                            return pc[data.sender].createAnswer();
-                        }).then((answer) => {
+                    pc[data.sender].createAnswer().then((answer) => {
                             return pc[data.sender].setLocalDescription(answer);
                         }).then(() => {
                             socket.emit('sdp', {
@@ -306,8 +297,6 @@
                             });
 
                         }).catch();//catch error function empty
-
-                    } else { alert('您的浏览器不兼容'); }
 
                 })
             } else if (data.description.type === 'answer') {
@@ -359,8 +348,8 @@
 
                 call.click(function () {
                     console.log($(this).parent().parent().attr('user-id'))
-                    //P2PInit(socketID, false);
-                    P2PInit($(this).parent().parent().attr('user-id'), true);
+                    //PRInit(socketID, false);
+                    PRInit($(this).parent().parent().attr('user-id'), true);
                 })
 
                 hangup.click(function() {
