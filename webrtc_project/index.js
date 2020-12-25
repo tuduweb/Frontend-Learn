@@ -1,5 +1,4 @@
-var express = require('express');
-var app = express();
+var app = require('express')();
 var http = require('http').createServer(app);
 
 var fs = require('fs');
@@ -10,42 +9,39 @@ let sslOptions = {
 
 const https = require('https').createServer(sslOptions, app);
 
-var io = require('socket.io')(http);
+var io = require('socket.io')(https);
 
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
   });
 
-//还需要确定一下路由的方式
-app.get('/record2', (req, res) => {
-    res.sendFile(__dirname + '/record2.html');
-})
-
 app.get('/camera', (req, res) => {
     res.sendFile(__dirname + '/camera.html');
-})
+});
 
-app.use("/static", express.static('static/'));
+app.get('/record', (req, res) => {
+    res.sendFile(__dirname + '/record.html');
+});
+
+app.get('/camera_test', (req, res) => {
+    res.sendFile(__dirname + '/camera_test.html');
+});
+app.get('/old', (req, res) => {
+    res.sendFile(__dirname + '/old.html');
+});
 
 
-
-
-
-io.on('connection', (socket) => {
-    socket.join(socket.id);
-    //当建立连接时，可以选择服务器自动发送当前存在的用户出来
-    console.log('a user connected : ' + socket.id);
-    socket.on('disconnect', () => {
-        console.log('user disconnected : ' + socket.id);
-        socket.broadcast.emit('user disconnected', socket.id);
-    });
 
 io.on("connection", (socket) => {
+    socket.join( socket.id );
+
     console.log("a user connected " + socket.id);
 
     socket.on("disconnect", () => {
         console.log("user disconnected: " + socket.id);
+        socket.broadcast.emit('user disconnected', socket.id);
+
     })
 
     socket.on("chat message",(msg) => {
@@ -53,7 +49,23 @@ io.on("connection", (socket) => {
         //io.emit("chat message", msg);
         socket.broadcast.emit("chat message", msg);
     })
-})
+
+    socket.on( 'subscribe', ( data ) => {
+        //subscribe/join a room
+        //socket.join( data.room );
+        console.log(data);
+        console.log(data.room);
+  
+        socket.join(data.room);
+        socket.join(data.socketID);
+        socket.to(data.room).emit('new user', { socketID: data.socketID } );//似乎是发送除了自己的其它玩家
+
+    } );
+
+    socket.on( 'newUserStart', ( data ) => {
+      socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
+  } );
+
 
     socket.on('new user greet', (data) => {
         console.log(socket.id + ' greet ' + data.msg);
@@ -64,18 +76,25 @@ io.on("connection", (socket) => {
         io.to(data.receiver).emit('ok we connect', {sender : data.sender});
     })
 
-});
 
-http.listen(3000, () => {
-    console.log('listening on *:3000');
-});
+    socket.on( 'sdp', ( data ) => {
+        console.log('sdp' + data.description);
+        //console.log('sdp:  ' + data.sender + '   to:' + data.to);
+        socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
+    } );
 
-// const fs = require('fs');
-// const https = require('https');
-// // start https server
-// let sslOptions = {
-//     key: fs.readFileSync('key.pem'),
-//     cert: fs.readFileSync('cert.pem')
-//  };
- 
-//  let serverHttps = https.createServer(sslOptions, app).listen(443);
+    socket.on( 'ice candidates', ( data ) => {
+        console.log('ice candidates:  ');
+        console.log(data);
+        socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
+    } );
+})
+
+
+
+
+
+
+https.listen(4443, () => {
+    console.log('https listening on *:4443');
+});

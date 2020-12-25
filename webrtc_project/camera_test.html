@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Camera</title>
+</head>
+
+<body>
+    <video id="video-local" controls autoplay></video>
+
+    <canvas id="capture-canvas" style="display: none;"></canvas>
+
+    <button id="capture">拍照</button>
+
+    <ul id="capture-list"></ul>
+    <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
+
+    <script>
+        //封装一部分函数
+        function getUserMedia(constrains, success, error) {
+            if (navigator.mediaDevices.getUserMedia) {
+                //最新标准API
+                promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
+            } else if (navigator.webkitGetUserMedia) {
+                //webkit内核浏览器
+                promise = navigator.webkitGetUserMedia(constrains).then(success).catch(error);
+            } else if (navigator.mozGetUserMedia) {
+                //Firefox浏览器
+                promise = navagator.mozGetUserMedia(constrains).then(success).catch(error);
+            } else if (navigator.getUserMedia) {
+                //旧版API
+                promise = navigator.getUserMedia(constrains).then(success).catch(error);
+            }
+        }
+
+        function canGetUserMediaUse() {
+            return !!(navigator.mediaDevices.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+        }
+
+        const iceServer = {
+            iceServers: [{ urls: ["stun:ss-turn1.xirsys.com"] }, { username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi", credential: "446118be-38a4-11eb-9ece-0242ac140004", urls: ["turn:ss-turn1.xirsys.com:80?transport=udp", "turn:ss-turn1.xirsys.com:3478?transport=udp"] }]
+        };
+
+        const localVideoElm = document.getElementById("video-local");
+
+        var localStream = null;
+
+        function startCall(partnerName) {
+            pc[partnerName] = new RTCPeerConnection(iceServer);
+
+            //本地流
+            if (localStream) {
+                //
+            } else {
+                if (canGetUserMediaUse()) {
+                    getUserMedia({
+                        video: true,
+                        audio: true
+                    }, function (stream) {
+                        localStream = stream;
+                        stream.getTracks().forEach((track) => {
+                            pc[partnerName].addTrack(track, stream);//should trigger negotiationneeded event
+                        });
+
+                        localVideoElm.srcObject = stream;
+                        $(localVideoElm).width(800);
+
+                    }, function (error) {
+                        console.log("访问用户媒体设备失败：", error.name, error.message);
+                    })
+                } else { alert('您的浏览器不兼容'); }
+            }
+
+            //本地流创建完毕，发起SDP消息
+            if (createOffer) {
+                //每当WebRTC基础结构需要你重新启动会话协商过程时，都会调用此函数。它的工作是创建和发送一个请求，给被叫方，要求它与我们联系。
+                pc[partnerName].onnegotiationneeded = () => {
+                    //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/createOffer
+
+                    pc[partnerName].createOffer().then((offer) => {
+                        return pc[partnerName].setLocalDescription(offer);
+                    }).then(() => {
+                        //把发起者的描述信息通过Signal Server发送到接收者
+                        socket.emit('sdp', {
+                            type: 'video-offer',
+                            description: pc[partnerName].localDescription,
+                            to: partnerName,
+                            sender: socketID
+                        });
+                    })
+                    //.catch()
+
+                    // //里面有.then的步骤
+                    // let offer = await pc[partnerName].createOffer();
+                    // console.log(offer);
+                    // await pc[partnerName].setLocalDescription(offer);
+                    // console.log('localDescription');
+                    // console.log(pc[partnerName].localDescription);
+                };
+            }
+
+            //当向连接中添加磁道时，track 事件的此处理程序由本地WebRTC层调用。例如，可以将传入媒体连接到元素以显示它。详见 Receiving new streams 。
+            pc[partnerName].ontrack = (ev) => {
+                let str = e.stream[0];
+
+                if (document.getElementById(`${partnerName}-video`)) {
+                    document.getElementById(`${partnerName}-video`).srcObject = str;
+                } else {
+                    let newVideo = document.createElement('video');
+                    newVideo.id = `${partnerName}-video`;
+                    newVideo.autoplay = true;
+                    newVideo.controls = true;
+                    newVideo.className = 'remote-video';
+                    newVideo.srcObject = str;
+
+                    document.getElementById('videos').appendChild(newVideo);
+                }
+            }
+
+            //当需要你通过信令服务器将一个ICE候选发送给另一个对等端时，本地ICE层将会调用你的 icecandidate 事件处理程序。有关更多信息，请参阅Sending ICE candidates 以查看此示例的代码。
+            pc[partnerName].onicecandidate = (candidate) => {
+                socket.emit('ice candidates', { candidate: candidate, to: partnerName, sender: socketID });
+            }
+
+            //pc[partnerName].onnegotiationneeded
+        }
+
+
+
+        $('document').ready(() => {
+
+            if (canGetUserMediaUse()) {
+                getUserMedia({
+                    video: true,
+                    audio: false
+                }, (stream) => {
+                    localVideoElm.srcObject = stream;
+                    $(localVideoElm).width(800);
+                }, (err) => {
+                    console.log('访问用户媒体失败: ', err.name, err.message);
+                });
+            } else {
+                alert('您的浏览器不兼容');
+            }
+
+
+            $('#capture').click(() => {
+                let video = localVideoElm//原生dom
+                let isPlaying = !(video.paused || video.ended || video.seeking || video.readyState < video.HAVE_FUTURE_DATA)
+
+                if (isPlaying) {
+                    let canvas = $('#capture-canvas')
+                    canvas.attr('width', localVideoElm.clientWidth);//设置canvas的宽度
+                    canvas.attr('height', localVideoElm.clientHeight);//设置canvas的高度
+
+                    let img = $('<img>')
+                    img.attr('width', localVideoElm.clientWidth);//设置图像的宽度
+                    img.attr('height', localVideoElm.clientHeight);//设置图像的高度
+
+                    //canvas[0] //jQuery对象转dom
+                    var context = canvas[0].getContext('2d');
+                    //在canvas上绘图，其绘图坐标为0,0; 
+                    //绘图大小为摄像头内容的宽度，高度（全局绘制，你可以改变这些值试试效果）。
+                    context.drawImage(localVideoElm, 0, 0, localVideoElm.clientWidth, localVideoElm.clientHeight);
+                    //根据canvas内容进行编码，并赋值到图片上
+                    var data = canvas[0].toDataURL('image/png');
+                    img.attr('src', data);
+                    //插入到id为capture-list的有序列表里
+                    $('#capture-list').append($('<li></li>').html(img));
+                }
+            })
+
+        });
+
+
+        var socket = io();
+
+
+        //处理请求 ：首先，它需要创建自己的RTCPeerConnection 并添加包含麦克风和网络摄像头的音频和视频的磁道。其次，它需要对收到的请求进行处理，构建并返回应答。
+        socket.on('sdp', async (data) => {
+
+            if (data.type === 'video-offer') {
+                //把发送者(offer)的描述，存储在接收者的remoteDesc中。
+                let desc = new RTCSessionDescription(data.description);
+                pc[data.sender].setRemoteDescription(desc).then(() => {
+
+                    //给接收者设置远程视频（发送者offer的）
+                    if (canGetUserMediaUse()) {
+                        getUserMedia({
+                            video: true,
+                            audio: true
+                        }, (stream) => {
+
+                            stream.getTracks().forEach((track) => {
+                                pc[data.sender].addTrack(track, stream);
+                            });
+
+                        }, function (error) {
+                            console.log("访问用户媒体设备失败：", error.name, error.message);
+                        }).then( () => {
+                            
+                            return pc[data.sender].createAnswer();
+
+                        } ).then( ( answer ) => {
+                            return pc[data.sender].setLocalDescription(answer);
+                        }).then(() => {
+                            socket.emit('sdp', {
+                                type : 'video-answer',
+                                description: pc[data.sender].localDescription,
+                                to: data.sender,
+                                sender: socketID
+                            });
+
+                        }).catch();//catch error function empty
+
+                    } else { alert('您的浏览器不兼容'); }
+
+                })
+            }
+
+        });
+
+        //接收ICE候选
+        socket.on('ice candidates', async (data) => {
+
+            if(data.candidate){
+                let candidate = new RTCIceCandidate(msg.candidate);
+
+                pc[data.sender].addIceCandidate(candidate).catch();//catch err function empty
+            }
+
+        });
+
+
+
+    </script>
+</body>
+
+
+</html>

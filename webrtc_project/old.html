@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hello World</title>
+    <title>Hello <%= title %></title>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.3/socket.io.js"></script>
+
+    <script>
+    //建立socket链接
+    const socket = io('//');
+    const iceServer = {
+        iceServers: [{   urls: [ "stun:ss-turn1.xirsys.com" ]}, {   username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi",   credential: "446118be-38a4-11eb-9ece-0242ac140004",   urls: [       "turn:ss-turn1.xirsys.com:80?transport=udp",       "turn:ss-turn1.xirsys.com:3478?transport=udp"   ]}]
+    };
+    function getUserMedia(constrains, success, error) {
+        if (navigator.mediaDevices.getUserMedia) {
+            //最新标准API
+            promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
+        } else if (navigator.webkitGetUserMedia) {
+            //webkit内核浏览器
+            promise = navigator.webkitGetUserMedia(constrains).then(success).catch(error);
+        } else if (navigator.mozGetUserMedia) {
+            //Firefox浏览器
+            promise = navagator.mozGetUserMedia(constrains).then(success).catch(error);
+        } else if (navigator.getUserMedia) {
+            //旧版API
+            promise = navigator.getUserMedia(constrains).then(success).catch(error);
+        }
+    }
+
+    function canGetUserMediaUse() {
+        return !!(navigator.mediaDevices.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+    }
+    </script>
+
+</head>
+<body>
+    <h1 id="socket_id">Header</h1>
+    <p>Welcome to <%= title %></p>
+
+    <div>
+        <video autoplay controls id="video"></video>
+        <!-- <button onclick="showVideo()">打开摄像头</button>
+        <canvas id="canvas"></canvas>
+        <button onclick="capture()">拍照</button>
+        <button id="connect">CONNECT</button> -->
+        <div id="videos"></div>
+    </div>
+</body>
+<script>
+window.addEventListener( 'load', () => {
+    var room = '1001 room';
+    var socketID = 0;
+    var pc = [];
+    var myStream = '';
+
+    socket.on('connect', function () {
+        socketID = socket.io.engine.id;
+
+        socket.emit( 'subscribe', {
+                'room': room,
+                'socketID': socketID
+            });
+    
+        console.log('hello world!' + socketID);
+        socket.emit('message', 'hello world!' + socketID);
+        var elm = document.getElementById('socket_id');
+        elm.innerText = socketID;
+    });
+
+    //点对点准备建立连接
+    socket.on( 'new user', ( data ) => {
+                console.log("hello new user");
+                console.log(data);
+                pc.push(data.sender);
+                init( true, data.socketID);
+                socket.emit( 'newUserStart', { to: data.socketID, sender: socketID } );
+            });
+    
+    socket.on( 'newUserStart', ( data ) => {
+        //pc.push( data.sender );
+        //init( false, data.sender );
+        pc.push(data.sender);
+        init( false, data.sender);
+        console.log("pc.push " + data.sender);
+    });
+
+    socket.on( 'ice candidates', async ( data ) => {
+        console.log('ice candidates');
+        console.log(data);
+        data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
+    });
+
+    //SDP协议来交换媒体信息.
+    socket.on( 'sdp', async ( data ) => {
+        console.log('sdp');
+        console.log(data);
+        //offer:该会话描述对象描述首次握手的请求/响应。会话过程从发送方到接收方。
+        //提议
+        if ( data.description.type === 'offer' ) {
+            //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/setRemoteDescription
+            data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
+            
+            if (canGetUserMediaUse()) {
+                getUserMedia({
+                    video: true,
+                    audio: false
+                }, async function (stream) {
+
+                    stream.getTracks().forEach( ( track ) => {
+                        pc[data.sender].addTrack( track, stream );
+                    } );
+
+                    let answer = await pc[data.sender].createAnswer();
+
+                    await pc[data.sender].setLocalDescription( answer );
+
+                    socket.emit( 'sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socketID } );
+
+                }, function (error) {
+                    console.log("访问用户媒体设备失败：", error.name, error.message);
+                })
+            } else { alert('您的浏览器不兼容'); }
+
+        }
+        //SDP协议请求内容包含在属性sdp中。 换言之，此会话描述描述了商定的配置，并将被发送以完成协商。.
+        else if ( data.description.type === 'answer' ) {
+            //应答
+            await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
+        }
+    } );
+
+    function init( createOffer, partnerName){
+        pc[partnerName] = new RTCPeerConnection(iceServer);
+
+        if(myStream){
+            //
+        }else{
+            if (canGetUserMediaUse()) {
+                getUserMedia({
+                    video: true,
+                    audio: false
+                }, function (stream) {
+                    myStream = stream;
+                    stream.getTracks().forEach( ( track ) => {
+                            pc[partnerName].addTrack( track, stream );//should trigger negotiationneeded event
+                    });
+
+                    // const video = document.getElementById('video');
+                    // video.srcObject = stream;
+                    // video.play();
+                    const localVidElem = document.getElementById( 'video' );
+
+                    localVidElem.srcObject = stream;
+                    //mirrorMode ? localVidElem.classList.add( 'mirror-mode' ) : localVidElem.classList.remove( 'mirror-mode' );
+
+                }, function (error) {
+                    console.log("访问用户媒体设备失败：", error.name, error.message);
+                })
+            } else { alert('您的浏览器不兼容'); }
+        }
+
+        if ( createOffer ) {
+            pc[partnerName].onnegotiationneeded = async () => {
+                //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/createOffer
+                //里面有.then的步骤
+                let offer = await pc[partnerName].createOffer();
+                console.log(offer);
+                await pc[partnerName].setLocalDescription( offer );
+                console.log('localDescription');
+                console.log(pc[partnerName].localDescription);
+                socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socketID } );
+            };
+        };
+
+        //send ice candidate to partnerNames
+        //只要本地代理ICE 需要通过信令服务器传递信息给其他对等端时就会触发
+        pc[partnerName].onicecandidate = ( { candidate } ) => {
+            //请注意，当检测到协议结束时candidate 属性为 null.
+            socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socketID } );
+        };
+
+        //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/ontrack
+        pc[partnerName].ontrack = ( e ) => {
+            let str = e.streams[0];
+            console.log("stream add:" + str);
+            if ( document.getElementById( `${ partnerName }-video` ) ) {
+                document.getElementById( `${ partnerName }-video` ).srcObject = str;
+            }
+
+            else {
+                //video elem
+                //ES6 新增了let命令，用来声明局部变量。它的用法类似于var，但是所声明的变量，只在let命令所在的代码块内有效，而且有暂时性死区的约束。
+                let newVid = document.createElement( 'video' );
+                newVid.id = `${ partnerName }-video`;
+                newVid.srcObject = str;
+                newVid.autoplay = true;
+                newVid.className = 'remote-video';
+
+                //video controls elements
+                let controlDiv = document.createElement( 'div' );
+                controlDiv.className = 'remote-video-controls';
+                controlDiv.innerHTML = `<i class="fa fa-microphone text-white pr-3 mute-remote-mic" title="Mute"></i>
+                    <i class="fa fa-expand text-white expand-remote-video" title="Expand"></i>`;
+
+                //create a new div for card
+                let cardDiv = document.createElement( 'div' );
+                cardDiv.className = 'card card-sm';
+                cardDiv.id = partnerName;
+                cardDiv.appendChild( newVid );
+                cardDiv.appendChild( controlDiv );
+
+                //put div in main-section elem
+                document.getElementById( 'videos' ).appendChild( cardDiv );
+
+                //h.adjustVideoElemSize();
+            }
+        };
+
+        //This happens whenever the aggregate state of the connection changes. The aggregate state is a combination of the states of all of the individual network transports being used by the connection.
+        //https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/onconnectionstatechange
+        pc[partnerName].onconnectionstatechange = ( d ) => {
+            console.log(partnerName + '  :' + pc[partnerName].iceConnectionState)
+                switch ( pc[partnerName].iceConnectionState ) {
+                    case "connected":
+                        // The connection has become fully connected
+                        console.log( partnerName + ': connect');
+                        break;
+                    case 'disconnected':
+                    case 'failed':
+                        //h.closeVideo( partnerName );
+                        break;
+
+                    case 'closed':
+                        //h.closeVideo( partnerName );
+                        break;
+                }
+            };
+
+
+            //to notify it that its signaling state, as indicated by the signalingState property, has changed.
+            pc[partnerName].onsignalingstatechange = ( d ) => {
+                switch ( pc[partnerName].signalingState ) {
+                    case "stable":
+                        console.log("ICE negotiation complete");
+                        break;
+                    case 'closed':
+                        console.log( "Signalling state is 'closed'" );
+                        //h.closeVideo( partnerName );
+                        break;
+                }
+            };
+
+    }
+
+});
+
+</script>
+</html>

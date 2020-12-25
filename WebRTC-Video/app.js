@@ -65,7 +65,7 @@ io.on('connection', (socket) => {
 //     console.log(socket.id); // x8WIv7-mJelg7on_ALbx
 //   });
 
-http.listen(12312, _ => {
+http.listen(8877, _ => {
   console.log("server running on 12312");
 });
 
