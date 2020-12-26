@@ -1,4 +1,3 @@
-//@author :  bilibili:一只斌  /   mail: tuduweb@qq.com
 var express = require('express');
 var app = express();
 var http = require('http').createServer(app);
@@ -25,60 +24,82 @@ app.get('/camera', (req, res) => {
     res.sendFile(__dirname + '/camera.html');
 });
 
+app.get('/record', (req, res) => {
+    res.sendFile(__dirname + '/record2.html');
+});
+
+app.get('/camera_test', (req, res) => {
+    res.sendFile(__dirname + '/camera_test.html');
+});
+app.get('/old', (req, res) => {
+    res.sendFile(__dirname + '/old.html');
+});
+
+
 
 io.on("connection", (socket) => {
-    //连接加入子房间
     socket.join( socket.id );
 
     console.log("a user connected " + socket.id);
 
     socket.on("disconnect", () => {
         console.log("user disconnected: " + socket.id);
-        //某个用户断开连接的时候，我们需要告诉所有还在线的用户这个信息
         socket.broadcast.emit('user disconnected', socket.id);
-    });
+
+    })
 
     socket.on("chat message",(msg) => {
         console.log(socket.id + " say: " + msg);
         //io.emit("chat message", msg);
         socket.broadcast.emit("chat message", msg);
-    });
+    })
 
-    //当有新用户加入，打招呼时，需要转发消息到所有在线用户。
+//     socket.on( 'subscribe', ( data ) => {
+//         //subscribe/join a room
+//         //socket.join( data.room );
+//         console.log(data);
+//         console.log(data.room);
+  
+//         socket.join(data.room);
+//         socket.join(data.socketID);
+//         socket.to(data.room).emit('new user', { socketID: data.socketID } );//似乎是发送除了自己的其它玩家
+
+//     } );
+
+//     socket.on( 'newUserStart', ( data ) => {
+//       socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
+//   } );
+
+
     socket.on('new user greet', (data) => {
-        console.log(data);
         console.log(socket.id + ' greet ' + data.msg);
         socket.broadcast.emit('need connect', {sender: socket.id, msg : data.msg});
     });
-    //在线用户回应新用户消息的转发
+
     socket.on('ok we connect', (data) => {
         io.to(data.receiver).emit('ok we connect', {sender : data.sender});
     });
 
-    //sdp 消息的转发
+
     socket.on( 'sdp', ( data ) => {
         console.log('sdp');
         console.log(data.description);
         //console.log('sdp:  ' + data.sender + '   to:' + data.to);
-        socket.to( data.to ).emit( 'sdp', {
-            description: data.description,
-            sender: data.sender
-        } );
+        socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
     } );
 
-    //candidates 消息的转发
     socket.on( 'ice candidates', ( data ) => {
         console.log('ice candidates:  ');
         console.log(data);
-        socket.to( data.to ).emit( 'ice candidates', {
-            candidate: data.candidate,
-            sender: data.sender
-        } );
+        socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
     } );
+})
 
-});
 
 
-https.listen(443, () => {
-    console.log('https listening on *:443');
+
+
+
+https.listen(4443, () => {
+    console.log('https listening on *:4443');
 });
